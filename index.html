@@ -100,26 +100,36 @@
   #combo.pop { animation:cc-combopop .34s cubic-bezier(.3,1.6,.5,1); }
   @keyframes cc-combopop { from{transform:translateX(-50%) scale(.6);} to{transform:translateX(-50%) scale(1);} }
 
-  /* ── Floating per-stomp call ── */
+  /* ── Floating per-stomp call — sits high (just under the HUD chips) so it never
+        covers the next coworker + their arrow in the mid-screen action zone ── */
   #pop {
-    top:42%; left:50%; transform:translate(-50%,-50%);
+    top:23%; left:50%; transform:translate(-50%,-50%);
     text-align:center; white-space:nowrap; opacity:0;
   }
+  /* solid white "shout" with a crisp dark outline + a per-tone coloured glow —
+     punchy and legible over any background (gradient-fill text went muddy). */
   #pop .m {
-    display:block; font-weight:900; font-size:40px; letter-spacing:.01em; text-transform:uppercase;
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-    background-image:linear-gradient(180deg, #fff, var(--ink-soft));
-    filter:drop-shadow(0 4px 14px rgba(0,0,0,.5));
+    display:block; font-weight:900; font-size:42px; line-height:1; letter-spacing:.005em; text-transform:uppercase;
+    color:#fff; -webkit-text-stroke:2.5px var(--pop-edge,#0b1020); paint-order:stroke fill;
+    text-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 22px var(--pop-glow,rgba(255,255,255,.5));
   }
+  /* the quip sits in a frosted memo pill so the sentence reads cleanly */
   #pop .s {
-    display:block; margin-top:6px; font-weight:600; font-size:15px; letter-spacing:.02em;
-    color:#fff; opacity:.92; text-shadow:0 2px 8px rgba(0,0,0,.7); white-space:normal; max-width:80vw;
+    display:inline-block; margin-top:11px; font-weight:600; font-size:13.5px; letter-spacing:.01em;
+    color:#eef2fb; white-space:normal; max-width:78vw;
+    background:rgba(12,18,32,.72); border:1px solid rgba(150,170,220,.26);
+    padding:6px 13px; border-radius:999px;
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    box-shadow:0 8px 20px rgba(0,0,0,.42);
   }
-  #pop.tone-perfect .m { background-image:linear-gradient(180deg,#fff 4%,#ffe07a 50%,#ff9d2e 100%);
-    filter:drop-shadow(0 4px 18px rgba(255,170,40,.6)); }
-  #pop.tone-promote .m { background-image:linear-gradient(180deg,#fff 4%,#9ff0e6 48%,#46cdbf 100%);
-    filter:drop-shadow(0 4px 20px rgba(70,205,191,.6)); font-size:34px; }
-  #pop.tone-plain .m { background-image:linear-gradient(180deg,#dfe6f5,#8e9bb8); font-size:30px; text-transform:none; }
+  #pop .s:empty { display:none; }
+  #pop.tone-perfect { --pop-glow:rgba(255,200,60,.95); --pop-edge:#5a3a06; }
+  #pop.tone-good    { --pop-glow:rgba(70,205,191,.9);  --pop-edge:#073a35; }
+  #pop.tone-good .m { font-size:34px; }
+  #pop.tone-miss    { --pop-glow:rgba(255,90,99,.95);  --pop-edge:#3a0b10; }
+  #pop.tone-miss .m { font-size:34px; }
+  #pop.tone-promote { --pop-glow:rgba(255,110,210,.95); --pop-edge:#3a0a2e; }
+  #pop.tone-promote .m { font-size:36px; }
   #pop.go { animation:cc-pop 1.5s ease-out; }
   @keyframes cc-pop {
     0%{opacity:0; transform:translate(-50%,-50%) scale(.6);}
@@ -333,7 +343,7 @@ const hud = {
   pop(text, tone, sub){
     popMainEl.textContent = text;
     popSubEl.textContent = sub || '';
-    popEl.classList.remove('go', 'tone-perfect', 'tone-promote', 'tone-plain');
+    popEl.classList.remove('go', 'tone-perfect', 'tone-good', 'tone-miss', 'tone-promote');
     void popEl.offsetWidth;
     popEl.classList.add('go', 'tone-' + (tone || 'perfect'));
   },

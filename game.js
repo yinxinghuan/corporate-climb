@@ -224,13 +224,9 @@ export function startGame({ canvas, hud }){
     const open = crouch > WIN_THRESH;              // window = they're bent enough to step on
     cue.visible = open;
     if (!open) return;
-    // sit BESIDE the coworker on their OUTER (toward-the-wall) side at mid-body height,
-    // never over their head — so it points "climb up here" without occluding the very
-    // figure the player is reading. A slight inward lean associates it with that person.
-    const side = target.x >= 0 ? 1 : -1;
-    cue.position.set(target.x + side * 0.98, target.y + 0.55 + Math.sin(cuePulse * 8) * 0.08, 0.28);
-    cue.rotation.z = side * 0.2;                    // lean the arrow toward the coworker
-    cue.scale.setScalar(0.82 + Math.sin(cuePulse * 11) * 0.1);
+    // hover above the bowed coworker, clear of the upper desk (opposite side of the zig-zag).
+    cue.position.set(target.x, target.y + 1.15 + Math.sin(cuePulse * 8) * 0.09, 0.12);
+    cue.scale.setScalar(1.0 + Math.sin(cuePulse * 11) * 0.12);
   }
 
   // ── the rising layoff tide ──
@@ -577,7 +573,7 @@ export function startGame({ canvas, hud }){
     combo = 0;
     hud.setCombo(0);
     sfxStumble();
-    hud.pop(word || 'TOO EARLY', 'plain');
+    hud.pop(word || 'TOO EARLY', 'miss');
   }
 
   function landHop(){
@@ -598,7 +594,7 @@ export function startGame({ canvas, hud }){
       burst(target.x, target.y + 0.25, 0.3, { count: 6, color: 0xf2c14e, speed: 2.2, up: 2.6, size: 0.12, life: 0.5, emissive: 0.8 });
       puffFx(target.x, target.y + 0.2, 0.3, { count: 5 });
       sfxStomp();
-      hud.pop(combo >= 2 ? pickWord(GOOD_WORDS) + ' ×' + combo : pickWord(GOOD_WORDS), 'plain');
+      hud.pop(combo >= 2 ? pickWord(GOOD_WORDS) + ' ×' + combo : pickWord(GOOD_WORDS), 'good');
     }
     hud.setScore(score);
     hud.setCombo(combo);
