@@ -224,10 +224,13 @@ export function startGame({ canvas, hud }){
     const open = crouch > WIN_THRESH;              // window = they're bent enough to step on
     cue.visible = open;
     if (!open) return;
-    // hover at a stable height above the bowed coworker — they're folded low now, and this
-    // sits well under the next desk (which is on the opposite side of the zig-zag anyway).
-    cue.position.set(target.x, target.y + 1.15 + Math.sin(cuePulse * 8) * 0.09, 0.12);
-    cue.scale.setScalar(1.0 + Math.sin(cuePulse * 11) * 0.12);
+    // sit BESIDE the coworker on their OUTER (toward-the-wall) side at mid-body height,
+    // never over their head — so it points "climb up here" without occluding the very
+    // figure the player is reading. A slight inward lean associates it with that person.
+    const side = target.x >= 0 ? 1 : -1;
+    cue.position.set(target.x + side * 0.98, target.y + 0.55 + Math.sin(cuePulse * 8) * 0.08, 0.28);
+    cue.rotation.z = side * 0.2;                    // lean the arrow toward the coworker
+    cue.scale.setScalar(0.82 + Math.sin(cuePulse * 11) * 0.1);
   }
 
   // ── the rising layoff tide ──
