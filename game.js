@@ -401,14 +401,26 @@ export function startGame({ canvas, hud }){
   function doSlow(amt, dur){ if (slow > 0) return; slow = dur; slowAmt = amt; }
 
   // ── WebAudio kit (lazy unlock on first tap) ──
-  let AC = null, master = null;
+  let AC = null, master = null, ambGain = null;
   function audioUnlock(){
-    if (AC){ if (AC.state !== 'running') AC.resume(); return; }
+    if (AC){ if (AC.state !== 'running' && AC.resume) AC.resume(); return; }
     const ACtor = window.AudioContext || window.webkitAudioContext; if (!ACtor) return;
     AC = new ACtor();
-    master = AC.createGain(); master.gain.value = 0.85;
+    master = AC.createGain(); master.gain.value = 0.95;
     const comp = AC.createDynamicsCompressor();
     master.connect(comp); comp.connect(AC.destination);
+    if (AC.state !== 'running' && AC.resume) AC.resume();   // some devices create it suspended
+    startAmbient();
+  }
+  // low office-tower air drone so the world is never dead-silent (fades in on first tap)
+  function startAmbient(){
+    if (!AC || ambGain) return;
+    ambGain = AC.createGain(); ambGain.gain.value = 0; ambGain.connect(master);
+    const o1 = AC.createOscillator(); o1.type = 'sine'; o1.frequency.value = 64;
+    const o2 = AC.createOscillator(); o2.type = 'sine'; o2.frequency.value = 96;
+    const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+    o1.connect(lp); o2.connect(lp); lp.connect(ambGain); o1.start(); o2.start();
+    ambGain.gain.linearRampToValueAtTime(0.05, AC.currentTime + 2.5);
   }
   function tone(freq, dur, o = {}){
     if (!AC) return;
@@ -432,16 +444,19 @@ export function startGame({ canvas, hud }){
     src.connect(f); f.connect(g); g.connect(master); src.start(t0);
   }
   // comedic "boink" stomp — a squishy low thud + a rubbery pitch drop
-  function sfxStomp(){ tone(260, 0.13, { type: 'sine', gain: 0.16, slideTo: 90 }); noiseBurst(0.1, { gain: 0.08, hp: 900, type: 'lowpass' }); }
+  function sfxStomp(){ tone(240, 0.15, { type: 'sine', gain: 0.22, slideTo: 70 }); tone(150, 0.12, { type: 'triangle', gain: 0.14, slideTo: 60 }); noiseBurst(0.12, { gain: 0.12, hp: 700, type: 'lowpass' }); }
   function sfxPerfect(combo){ const b = 540 + Math.min(combo, 10) * 34; tone(b, 0.13, { gain: 0.17 }); tone(b * 1.5, 0.2, { gain: 0.12, delay: 0.05 }); tone(b * 2, 0.18, { gain: 0.08, delay: 0.09 }); }
   function sfxPromote(){ tone(523, 0.16, { gain: 0.16 }); tone(659, 0.16, { gain: 0.15, delay: 0.08 }); tone(784, 0.26, { gain: 0.15, delay: 0.16 }); }
   function sfxStumble(){ tone(180, 0.14, { type: 'square', gain: 0.1, slideTo: 120 }); }
+  // a light upward "hup" + air on every jump, so each tap is audibly responsive
+  function sfxHop(){ tone(430, 0.11, { gain: 0.10, slideTo: 720 }); noiseBurst(0.09, { gain: 0.07, hp: 1400, type: 'highpass' }); }
   // sad-trombone-ish "laid off"
   function sfxLaidOff(){
     const seq = [[392, 0], [370, 0.17], [349, 0.34], [311, 0.52]];
     for (const [f, d] of seq) tone(f, 0.34, { type: 'sawtooth', gain: 0.14, slideTo: f * 0.94, delay: d, lp: 1400 });
     noiseBurst(0.5, { gain: 0.12, hp: 200 });
   }
+  function sfxUiClick(){ tone(660, 0.07, { gain: 0.12, slideTo: 880 }); }
 
   // ── rungs (desk ledges + a coworker standing on each) ──
   let rungs = [];
@@ -567,6 +582,7 @@ export function startGame({ canvas, hud }){
     hopLandY = target.y + backHeightOf(target);          // land ON the next coworker's bent back
     hopT = 0;
     state = HOP;
+    sfxHop();                                                // every climb tap makes a sound
     hero.rotation.y = (target.x > current.x) ? -0.5 : 0.5;   // face the direction of travel
   }
 
@@ -647,7 +663,7 @@ export function startGame({ canvas, hud }){
     hud.setDead({ score, best, title: curTitle });
   }
 
-  function restart(){ reset(); }
+  function restart(){ audioUnlock(); sfxUiClick(); reset(); }
 
   // ── camera ──
   function placeCamera(){
