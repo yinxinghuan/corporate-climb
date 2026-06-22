@@ -224,9 +224,9 @@ export function startGame({ canvas, hud }){
     const open = crouch > WIN_THRESH;              // window = they're bent enough to step on
     cue.visible = open;
     if (!open) return;
-    // hover just above the bent-over coworker's back (they're low now → clear of the upper desk)
-    const backTop = target.worker.position.y + (target.wh || 1.6) * 0.52;
-    cue.position.set(target.x, backTop + 0.7 + Math.sin(cuePulse * 8) * 0.09, 0.12);
+    // hover at a stable height above the bowed coworker — they're folded low now, and this
+    // sits well under the next desk (which is on the opposite side of the zig-zag anyway).
+    cue.position.set(target.x, target.y + 1.15 + Math.sin(cuePulse * 8) * 0.09, 0.12);
     cue.scale.setScalar(1.0 + Math.sin(cuePulse * 11) * 0.12);
   }
 
@@ -266,10 +266,29 @@ export function startGame({ canvas, hud }){
     model.scale.setScalar(scl);
     const bb = new THREE.Box3().setFromObject(model);
     const h = bb.max.y - bb.min.y;
+    const rig = model.userData.rig || null;
+    // ── WAIST pivot: re-parent everything above the hips (torso/arms/head/hair…) into
+    //    a group hinged at the hip line, so the figure can BOW ~90° at the waist while
+    //    the legs stay planted (a proper bow, not a whole-body lean). Legs (legL/legR)
+    //    are left as direct children of the model so they don't move. ──
+    let waist = null;
+    if (rig && rig.legL && rig.legR){
+      const hipY = rig.legL.position.y;               // top of the legs = hip line (model-local)
+      waist = new THREE.Group();
+      waist.position.y = hipY;
+      const keep = new Set([rig.legL, rig.legR]);
+      for (const child of [...model.children]){
+        if (keep.has(child)) continue;
+        child.position.y -= hipY;                     // rebase into waist-local space (geometry unchanged)
+        waist.add(child);
+      }
+      model.add(waist);
+    }
     const wrap = new THREE.Group();
     model.position.y = -bb.min.y;            // feet at wrap y=0
     wrap.add(model);
-    wrap.userData.rig = model.userData.rig || null;
+    wrap.userData.rig = rig;
+    wrap.userData.waist = waist;
     wrap.userData.height = h;
     return wrap;
   }
@@ -598,10 +617,12 @@ export function startGame({ canvas, hud }){
     if (r.stomped) return;
     r.stomped = true;
     const w = r.worker;
-    // squash flat + drop slightly (the comedic "stepped on" pose) — flatter on a perfect
-    w.scale.set(hard ? 1.35 : 1.25, hard ? 0.22 : 0.34, hard ? 1.2 : 1.15);
-    w.position.y = r.y - 0.02;
-    puffFx(r.x, r.y + 0.15, 0.35, { count: hard ? 9 : 7, color: 0xd9d2c2 });
+    // they STAY bowed over (their back is the step you climbed) — just press them down a
+    // touch, not flatten them into a pancake.
+    if (w.userData.waist) w.userData.waist.rotation.x = 1.55;   // hold a deep bow
+    w.scale.y = hard ? 0.84 : 0.9;                              // slight compression only
+    w.position.y = r.y - (hard ? 0.16 : 0.12);                 // pressed down a little
+    puffFx(r.x, r.y + 0.12, 0.35, { count: hard ? 7 : 5, color: 0xd9d2c2 });
   }
 
   function die(){
@@ -683,12 +704,14 @@ export function startGame({ canvas, hud }){
       if (r.stomped) continue;
       const crouch = Math.max(0, -bobOf(r));               // 0 standing → 1 fully bent over
       const w = r.worker;
-      w.position.y = r.y - 0.1 * crouch;                   // sink a little as they bend
-      w.scale.y = 1 - 0.18 * crouch;                       // compress
-      w.rotation.x = 0.72 * crouch;                        // bow forward → back becomes a step
+      if (w.userData.waist){
+        w.userData.waist.rotation.x = 1.5 * crouch;        // bow ~90° at the waist; legs stay planted
+      } else {
+        w.rotation.x = 0.72 * crouch;                      // fallback for rig-less figures (ghost)
+      }
       if (r.rig){
-        // arms hang down / brace forward as they bend; tucked up while upright
-        const reach = -0.2 + 1.2 * crouch;
+        // arms dangle forward off the bowing torso (they ride the waist already)
+        const reach = -0.15 + 0.45 * crouch;
         r.rig.armL.rotation.x = reach; r.rig.armR.rotation.x = reach;
       }
       // secondary cue: the target desk's accent edge glows during the step window
