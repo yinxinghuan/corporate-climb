@@ -192,24 +192,27 @@ export function startGame({ canvas, hud }){
     syncFacade();
   }
 
-  // ── STOMP CUE — the one focal "tap NOW" marker. A halo ring + a down-chevron that
-  //    hovers over the NEXT coworker's head. It is DIM/teal while they're crouched
-  //    (typing) and flares bright GOLD + scales up the instant they stand up (the
-  //    climb window). This is the single legible answer to "when do I tap?". ──
+  // ── STEP CUE — a bold UP-ARROW that appears over the NEXT coworker the moment they
+  //    BEND OVER (the step window): "now you can step on their back to go up". Magenta
+  //    so it pops against the warm/cool glowing window facade (no window uses this hue),
+  //    matte-ish solid so it reads as a UI marker, not another light source. Because it
+  //    only shows while they're bent (and therefore low), it never rides up into the
+  //    desk above — which the old head-halo did when they jumped. ──
+  const ARROW_COL = 0xff2e88;
+  const arrowMat = new THREE.MeshStandardMaterial({ color: ARROW_COL, emissive: ARROW_COL, emissiveIntensity: 0.55, flatShading: true, roughness: 0.45, metalness: 0 });
   const cue = new THREE.Group();
-  const cueRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.42, 0.06, 8, 28),
-    new THREE.MeshStandardMaterial({ color: 0x46cdbf, emissive: 0x46cdbf, emissiveIntensity: 0.5, flatShading: true, transparent: true })
-  );
-  cueRing.rotation.x = Math.PI / 2;        // horizontal halo
-  cue.add(cueRing);
-  const cueArrow = new THREE.Mesh(
-    new THREE.ConeGeometry(0.2, 0.34, 4),
-    new THREE.MeshStandardMaterial({ color: 0x46cdbf, emissive: 0x46cdbf, emissiveIntensity: 0.6, flatShading: true, transparent: true })
-  );
-  cueArrow.rotation.x = Math.PI;           // point DOWN at the head
-  cueArrow.position.y = 0.5;
-  cue.add(cueArrow);
+  const cueHead = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.46, 4), arrowMat);
+  cueHead.rotation.y = Math.PI / 4;        // square the pyramid to the camera
+  cueHead.position.y = 0.4;
+  cue.add(cueHead);
+  const cueShaft = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.4, 0.2), arrowMat);
+  cueShaft.position.y = 0.02;
+  cue.add(cueShaft);
+  // a tiny white tip so it crisps up against the bloom
+  const cueTip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8, flatShading: true }));
+  cueTip.position.y = 0.64;
+  cue.add(cueTip);
   cue.visible = false;
   scene.add(cue);
   let cuePulse = 0;
@@ -217,18 +220,14 @@ export function startGame({ canvas, hud }){
     cuePulse += dt;
     const target = current && rungByIdx(current.idx + 1);
     if (!target || target.stomped || state === DEAD || state === DEAD_FALL){ cue.visible = false; return; }
-    cue.visible = true;
-    const open = bobOf(target) > WIN_THRESH;
-    // sit just above the (bobbing) coworker's head
-    const headTop = target.worker.position.y + (target.wh || 1.6);
-    cue.position.set(target.x, headTop + 0.62 + Math.sin(cuePulse * 4) * 0.06, 0.1);
-    const col = open ? 0xffce4a : 0x46cdbf;
-    const ei = open ? 1.5 : 0.45;
-    cueRing.material.color.setHex(col); cueRing.material.emissive.setHex(col); cueRing.material.emissiveIntensity = ei;
-    cueArrow.material.color.setHex(col); cueArrow.material.emissive.setHex(col); cueArrow.material.emissiveIntensity = ei;
-    const s = open ? 1.0 + Math.sin(cuePulse * 12) * 0.12 : 0.72;
-    cue.scale.setScalar(s);
-    cueArrow.position.y = open ? 0.46 + Math.sin(cuePulse * 12) * 0.06 : 0.5;
+    const crouch = Math.max(0, -bobOf(target));    // 0 standing → 1 bent over
+    const open = crouch > WIN_THRESH;              // window = they're bent enough to step on
+    cue.visible = open;
+    if (!open) return;
+    // hover just above the bent-over coworker's back (they're low now → clear of the upper desk)
+    const backTop = target.worker.position.y + (target.wh || 1.6) * 0.52;
+    cue.position.set(target.x, backTop + 0.7 + Math.sin(cuePulse * 8) * 0.09, 0.12);
+    cue.scale.setScalar(1.0 + Math.sin(cuePulse * 11) * 0.12);
   }
 
   // ── the rising layoff tide ──
@@ -447,7 +446,9 @@ export function startGame({ canvas, hud }){
     scene.add(slab);
 
     // coworker standing on the desk facing the camera-ish
-    const charKey = ROSTER[(idx * 5 + 3) % ROSTER.length];
+    // random cast each rung (the old idx*5%30 only ever surfaced 6 of the 30 builders —
+    // step 5 shares a factor with 30 — so monsters/pop-culture archetypes barely showed).
+    const charKey = ROSTER[Math.floor(Math.random() * ROSTER.length)];
     const worker = buildPerson(charKey, HERO_SCALE * 0.96);
     worker.position.set(x, y, 0.05);
     worker.rotation.y = (x < 0 ? 0.35 : -0.35);   // slight turn toward play column
@@ -530,15 +531,16 @@ export function startGame({ canvas, hud }){
     if (state !== IDLE) return;          // timing game — no tap buffering across hop/stumble
     const target = rungByIdx(current.idx + 1);
     if (!target) return;
-    const bob = bobOf(target);
-    if (bob <= WIN_THRESH){
-      // mistimed — tell them HONESTLY which way they were off (rising = they're not up
-      // yet, falling = they already sat back down)
-      const rising = Math.cos(clock * tempoAt(target.idx) + target.bobPhase) > 0;
-      stumble(rising ? 'TOO EARLY' : 'TOO LATE');
+    // STEP WINDOW = the coworker is BENT OVER (bob at its low). Step on their back to climb.
+    const crouch = Math.max(0, -bobOf(target));
+    if (crouch <= WIN_THRESH){
+      // mistimed — tell them HONESTLY which way they were off. bob still falling = they're
+      // not bent enough yet (too early); bob rising = they already stood back up (too late).
+      const bending = Math.cos(clock * tempoAt(target.idx) + target.bobPhase) < 0;
+      stumble(bending ? 'TOO EARLY' : 'TOO LATE');
       return;
     }
-    hopPerfect = bob >= PERFECT_THRESH;
+    hopPerfect = crouch >= PERFECT_THRESH;
     hopFrom = { x: current.x, y: current.y };
     hopTo = target;
     hopT = 0;
@@ -674,23 +676,26 @@ export function startGame({ canvas, hud }){
     }
     mp.needsUpdate = true;
 
-    // coworkers' crouch→stand cycle (the visible metronome) + target desk glow
+    // coworkers' stand⇄BEND-OVER cycle (the visible metronome). They bow forward at the
+    // low of the bob — that's the step window (the hero climbs over their back). Standing
+    // upright = closed window.
     for (const r of rungs){
       if (r.stomped) continue;
-      const b = bobOf(r);
-      const u = (b + 1) / 2;                                // 0 crouched → 1 standing tall
-      r.worker.position.y = r.y + Math.max(0, b) * 0.34;    // clearly rises when standing
-      r.worker.scale.y = 0.8 + 0.26 * u;                    // crouch low, stretch up tall
+      const crouch = Math.max(0, -bobOf(r));               // 0 standing → 1 fully bent over
+      const w = r.worker;
+      w.position.y = r.y - 0.1 * crouch;                   // sink a little as they bend
+      w.scale.y = 1 - 0.18 * crouch;                       // compress
+      w.rotation.x = 0.72 * crouch;                        // bow forward → back becomes a step
       if (r.rig){
-        // arms hammer the keyboard when crouched, fling up when they stand
-        const reach = -0.25 - 0.95 * u;
+        // arms hang down / brace forward as they bend; tucked up while upright
+        const reach = -0.2 + 1.2 * crouch;
         r.rig.armL.rotation.x = reach; r.rig.armR.rotation.x = reach;
       }
-      // secondary cue: the target desk's accent edge glows during the window
+      // secondary cue: the target desk's accent edge glows during the step window
       const m = r.slab.userData.accentMesh;
       if (m){
         const isTarget = current && (r.idx === current.idx + 1);
-        m.material.emissiveIntensity = (isTarget && b > WIN_THRESH) ? 1.2 : 0;
+        m.material.emissiveIntensity = (isTarget && crouch > WIN_THRESH) ? 1.2 : 0;
       }
     }
 
