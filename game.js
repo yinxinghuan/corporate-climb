@@ -639,6 +639,7 @@ export function startGame({ canvas, hud }){
     // they STAY bowed over (their back is the step you climbed) — just press them down a
     // touch, not flatten them into a pancake.
     if (w.userData.waist) w.userData.waist.rotation.x = 1.55;   // hold a deep bow
+    if (r.rig){ r.rig.armL.rotation.x = -1.55; r.rig.armR.rotation.x = -1.55; }  // arms hang straight down
     w.scale.y = hard ? 0.84 : 0.9;                              // slight compression only
     w.position.y = r.y - (hard ? 0.16 : 0.12);                 // pressed down a little
     r.standY = r.y + backHeightOf(r);                          // hero now rests ON the bent back
@@ -724,15 +725,18 @@ export function startGame({ canvas, hud }){
       if (r.stomped) continue;
       const crouch = Math.max(0, -bobOf(r));               // 0 standing → 1 fully bent over
       const w = r.worker;
+      const waistAngle = 1.5 * crouch;
       if (w.userData.waist){
-        w.userData.waist.rotation.x = 1.5 * crouch;        // bow ~90° at the waist; legs stay planted
+        w.userData.waist.rotation.x = waistAngle;          // bow ~90° at the waist; legs stay planted
       } else {
         w.rotation.x = 0.72 * crouch;                      // fallback for rig-less figures (ghost)
       }
       if (r.rig){
-        // arms dangle forward off the bowing torso (they ride the waist already)
-        const reach = -0.15 + 0.45 * crouch;
-        r.rig.armL.rotation.x = reach; r.rig.armR.rotation.x = reach;
+        // arms hang straight DOWN toward the floor — counter the waist's forward fold so they
+        // don't swing out front (that read as a formal greeting bow). Now it reads as
+        // bracing / being bent over to be stepped on.
+        const armRot = -waistAngle;
+        r.rig.armL.rotation.x = armRot; r.rig.armR.rotation.x = armRot;
       }
       // secondary cue: the target desk's accent edge glows during the step window
       const m = r.slab.userData.accentMesh;
