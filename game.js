@@ -238,7 +238,7 @@ export function startGame({ canvas, hud }){
   // ── bloom (executive gold + lit windows + tide glow pop) ──
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.5, 0.6, 0.82);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.6, 0.84);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 

@@ -97,7 +97,7 @@ export function facadeStorey(idx){
       const h2 = hash(idx * 5.1 + c * 2.7);
       const cool = h2 < 0.2;
       const col = cool ? coolLit : warm[h2 < 0.6 ? 0 : 1];
-      const ei = 1.0 + h2 * 0.95;                       // ~1.0 → 1.95, clearly glowing
+      const ei = 0.6 + h2 * 0.7;                        // ~0.6 → 1.3, glowing but not blown out
       g.add(box(FAC_CW, FAC_CH, 0.12, col, x, 0, 0, { e: col, ei, r: 0.5 }));
     } else {
       g.add(box(FAC_CW, FAC_CH, 0.12, glass, x, 0, 0, { r: 0.5 }));

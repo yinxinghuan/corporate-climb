@@ -106,12 +106,13 @@
     top:23%; left:50%; transform:translate(-50%,-50%);
     text-align:center; white-space:nowrap; opacity:0;
   }
-  /* solid white "shout" with a crisp dark outline + a per-tone coloured glow —
-     punchy and legible over any background (gradient-fill text went muddy). */
+  /* solid white "shout" with a clean soft edge + a per-tone coloured glow. Font size
+     is responsive (vw) so long calls like STEAMROLLED!/SR. MANAGER never spill off the
+     sides of a narrow phone. */
   #pop .m {
-    display:block; font-weight:900; font-size:42px; line-height:1; letter-spacing:.005em; text-transform:uppercase;
-    color:#fff; -webkit-text-stroke:2.5px var(--pop-edge,#0b1020); paint-order:stroke fill;
-    text-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 22px var(--pop-glow,rgba(255,255,255,.5));
+    display:block; font-weight:800; font-size:clamp(23px, 8vw, 40px); line-height:1;
+    letter-spacing:.012em; text-transform:uppercase; white-space:nowrap; color:#fff;
+    text-shadow:0 1px 0 var(--pop-edge,#0b1020), 0 2px 7px rgba(0,0,0,.6), 0 0 17px var(--pop-glow,rgba(255,255,255,.5));
   }
   /* the quip sits in a frosted memo pill so the sentence reads cleanly */
   #pop .s {
@@ -125,11 +126,11 @@
   #pop .s:empty { display:none; }
   #pop.tone-perfect { --pop-glow:rgba(255,200,60,.95); --pop-edge:#5a3a06; }
   #pop.tone-good    { --pop-glow:rgba(70,205,191,.9);  --pop-edge:#073a35; }
-  #pop.tone-good .m { font-size:34px; }
+  #pop.tone-good .m { font-size:clamp(20px, 6.4vw, 32px); }
   #pop.tone-miss    { --pop-glow:rgba(255,90,99,.95);  --pop-edge:#3a0b10; }
-  #pop.tone-miss .m { font-size:34px; }
+  #pop.tone-miss .m { font-size:clamp(20px, 6.4vw, 32px); }
   #pop.tone-promote { --pop-glow:rgba(255,110,210,.95); --pop-edge:#3a0a2e; }
-  #pop.tone-promote .m { font-size:36px; }
+  #pop.tone-promote .m { font-size:clamp(21px, 7vw, 36px); }
   #pop.go { animation:cc-pop 1.5s ease-out; }
   @keyframes cc-pop {
     0%{opacity:0; transform:translate(-50%,-50%) scale(.6);}
