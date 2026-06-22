@@ -58,35 +58,50 @@ export function deskSlab(half, tone, idx, tier = 0){
   return g;
 }
 
-// ── parallax glass facade — a tall vertical band of office windows behind the play
-//    column. Built as ONE tile of `rows` window-storeys that the game wraps in Y as
-//    the camera climbs, so the wall is always populated. A scatter of windows are
-//    "lit" (warm emissive) for a dusk-skyscraper feel; the rest are cool/dark glass. ──
-export function towerFacade(rows = 14){
+// ── one facade STOREY — a single row of office windows for the wall behind the play
+//    column. The game spawns/recycles these keyed to ABSOLUTE world height (like the
+//    desk rungs) so the wall never pops in and naturally VARIES with altitude:
+//    low floors = cool blue-glass offices, mid = warm lit cubicles, high = gold
+//    executive lobbies, plus the occasional dark mechanical/setback floor for rhythm.
+//    `idx` is the absolute storey index; STOREY_H is the vertical pitch. ──
+export const STOREY_H = 1.62;
+const FAC_COLS = 8, FAC_CW = 1.02, FAC_GAPX = 0.16, FAC_CH = 1.2;
+export const FACADE_W = FAC_COLS * (FAC_CW + FAC_GAPX);
+
+// deterministic pseudo-random from an integer (no Math.random — keeps a storey stable
+// across rebuilds and lets the look depend purely on height)
+function hash(n){ const s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
+
+export function facadeStorey(idx){
   const g = new THREE.Group();
-  const COLS = 7, CW = 1.05, CH = 1.3, GAPX = 0.18, GAPY = 0.22;
-  const totalW = COLS * (CW + GAPX);
-  const litColors = [0xffd98a, 0xffc266, 0xfff0c4, 0x9fd6ff];
-  for (let r = 0; r < rows; r++){
-    for (let c = 0; c < COLS; c++){
-      const x = (c - (COLS - 1) / 2) * (CW + GAPX);
-      const y = r * (CH + GAPY);
-      // deterministic-ish scatter of lit windows (no Math.random at module scope is
-      // fine here — facade is purely cosmetic and rebuilt rarely)
-      const lit = ((r * 7 + c * 3) % 5 === 0);
-      const col = lit ? litColors[(r + c) % litColors.length] : 0x20303e;
-      const win = box(CW, CH, 0.12, col, x, y, 0,
-        lit ? { e: col, ei: 0.9, r: 0.6 } : { r: 0.5 });
-      g.add(win);
-      // mullion frame (thin dark bars)
-      g.add(box(CW + GAPX, 0.06, 0.14, 0x182230, x, y - CH / 2 - GAPY / 2, 0.01));
-    }
-    // floor slab band between storeys
-    g.add(box(totalW + 0.4, 0.12, 0.16, 0x141d29, 0, r * (CH + GAPY) - CH / 2 - GAPY / 2, 0.02));
+  const tier = Math.max(0, Math.min(1, idx / 56));     // 0 ground → 1 penthouse (~storey 56)
+  const mechanical = (idx > 4 && idx % 9 === 0);        // periodic dark service floor
+  // glass tint shifts up the tower: slate-blue → teal → warm gold
+  const glass = mechanical ? 0x161d26
+    : tier < 0.45 ? 0x223044
+    : tier < 0.78 ? 0x214038
+    : 0x3a3220;
+  // lit-window warmth + how many are lit (busy mid-floors glow most)
+  const litCol = tier > 0.78 ? 0xffd676 : tier > 0.45 ? 0xffcaa0 : 0x9fd0ee;
+  const litRate = mechanical ? 0.06 : tier < 0.45 ? 0.28 : tier < 0.78 ? 0.5 : 0.34;
+  const frame = tier > 0.78 ? 0x6b5320 : 0x141d29;
+
+  for (let c = 0; c < FAC_COLS; c++){
+    const x = (c - (FAC_COLS - 1) / 2) * (FAC_CW + FAC_GAPX);
+    const lit = hash(idx * 31.7 + c * 7.3) < litRate;
+    const col = lit ? litCol : glass;
+    g.add(box(FAC_CW, FAC_CH, 0.12, col, x, 0, 0,
+      lit ? { e: col, ei: tier > 0.78 ? 1.1 : 0.85, r: 0.6 } : { r: 0.5 }));
   }
-  g.userData.tileH = rows * (CH + GAPY);
-  g.userData.totalW = totalW;
-  g.traverse(o => { if (o.isMesh) o.frustumCulled = false; });
+  // floor slab band beneath the windows + a thin sill above
+  g.add(box(FACADE_W + 0.5, 0.16, 0.18, frame, 0, -FAC_CH / 2 - STOREY_H * 0.18, 0.02));
+  g.add(box(FACADE_W + 0.3, 0.05, 0.16, frame, 0, FAC_CH / 2 + 0.06, 0.02));
+  // gold cornice ribs on executive floors
+  if (tier > 0.82) g.add(box(FACADE_W + 0.7, 0.1, 0.22, 0xc8a23a, 0, -FAC_CH / 2 - STOREY_H * 0.18, 0.06, { e: 0xc8a23a, ei: 0.5 }));
+
+  g.position.y = idx * STOREY_H;
+  g.traverse(o => { if (o.isMesh){ o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; } });
+  g.userData.idx = idx;
   return g;
 }
 

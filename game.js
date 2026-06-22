@@ -14,7 +14,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { deskSlab, towerFacade, layoffTide, DESK_TONES } from './builders/tower.js?v=1';
+import { deskSlab, facadeStorey, STOREY_H, layoffTide, DESK_TONES } from './builders/tower.js?v=2';
 import { CHARACTERS } from './builders/characters.js?v=1';
 
 // --- tunables ---------------------------------------------------------------
@@ -28,9 +28,9 @@ const HOP_APEX = 0.95;           // extra height at the top of the hop arc
 const AHEAD = 7;                 // rungs kept spawned above the hero
 const BEHIND = 4;                // recycle rungs more than this below
 
-// rhythm window — a coworker is "stompable for PERFECT" while their nervous bob is
-// near apex. Generous so it reads on a phone in a scroll feed.
-const WIN_THRESH = 0.42;         // bob value above this = in the perfect window
+// rhythm window — a coworker is stompable while they're STANDING UP (bob near apex).
+// Generous so it reads on a phone in a scroll feed; the stomp cue glows during it.
+const WIN_THRESH = 0.32;         // bob value above this = inside the climb window
 
 // layoff tide
 const TIDE_START = -9.0;          // tide top starts this far below floor 0 (early grace)
@@ -158,12 +158,78 @@ export function startGame({ canvas, hud }){
   }));
   scene.add(motes);
 
-  // ── parallax glass facade behind the play column (wraps in Y as we climb) ──
-  const facade = towerFacade(16);
+  // ── glass facade behind the play column — a pool of storeys recycled by absolute
+  //    world height (no pop-in) whose look varies with altitude. ──
+  const facade = new THREE.Group();
   facade.position.set(0, 0, -3.4);
   scene.add(facade);
-  const FACADE_TILE = facade.userData.tileH;
-  const FACADE_PARALLAX = 0.62;
+  let facStoreys = [];                 // [{ idx, mesh }]
+  const FAC_BELOW = 12, FAC_ABOVE = 16;   // world-y span to keep populated around the camera
+  function facadeSpan(){
+    const lo = Math.floor((camFocus.y - FAC_BELOW) / STOREY_H);
+    const hi = Math.ceil((camFocus.y + FAC_ABOVE) / STOREY_H);
+    return { lo, hi };
+  }
+  function spawnStorey(idx){
+    const m = facadeStorey(idx);
+    facade.add(m);
+    facStoreys.push({ idx, mesh: m });
+  }
+  function syncFacade(){
+    const { lo, hi } = facadeSpan();
+    // recycle out-of-range
+    for (let i = facStoreys.length - 1; i >= 0; i--){
+      const s = facStoreys[i];
+      if (s.idx < lo || s.idx > hi){ facade.remove(s.mesh); disposeGroup(s.mesh); facStoreys.splice(i, 1); }
+    }
+    // fill any missing storey in range
+    const have = new Set(facStoreys.map(s => s.idx));
+    for (let i = lo; i <= hi; i++) if (!have.has(i)) spawnStorey(i);
+  }
+  function resetFacade(){
+    for (const s of facStoreys){ facade.remove(s.mesh); disposeGroup(s.mesh); }
+    facStoreys = [];
+    syncFacade();
+  }
+
+  // ── STOMP CUE — the one focal "tap NOW" marker. A halo ring + a down-chevron that
+  //    hovers over the NEXT coworker's head. It is DIM/teal while they're crouched
+  //    (typing) and flares bright GOLD + scales up the instant they stand up (the
+  //    climb window). This is the single legible answer to "when do I tap?". ──
+  const cue = new THREE.Group();
+  const cueRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.42, 0.06, 8, 28),
+    new THREE.MeshStandardMaterial({ color: 0x46cdbf, emissive: 0x46cdbf, emissiveIntensity: 0.5, flatShading: true, transparent: true })
+  );
+  cueRing.rotation.x = Math.PI / 2;        // horizontal halo
+  cue.add(cueRing);
+  const cueArrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.2, 0.34, 4),
+    new THREE.MeshStandardMaterial({ color: 0x46cdbf, emissive: 0x46cdbf, emissiveIntensity: 0.6, flatShading: true, transparent: true })
+  );
+  cueArrow.rotation.x = Math.PI;           // point DOWN at the head
+  cueArrow.position.y = 0.5;
+  cue.add(cueArrow);
+  cue.visible = false;
+  scene.add(cue);
+  let cuePulse = 0;
+  function updateCue(dt){
+    cuePulse += dt;
+    const target = current && rungByIdx(current.idx + 1);
+    if (!target || target.stomped || state === DEAD || state === DEAD_FALL){ cue.visible = false; return; }
+    cue.visible = true;
+    const open = bobOf(target) > WIN_THRESH;
+    // sit just above the (bobbing) coworker's head
+    const headTop = target.worker.position.y + (target.wh || 1.6);
+    cue.position.set(target.x, headTop + 0.62 + Math.sin(cuePulse * 4) * 0.06, 0.1);
+    const col = open ? 0xffce4a : 0x46cdbf;
+    const ei = open ? 1.5 : 0.45;
+    cueRing.material.color.setHex(col); cueRing.material.emissive.setHex(col); cueRing.material.emissiveIntensity = ei;
+    cueArrow.material.color.setHex(col); cueArrow.material.emissive.setHex(col); cueArrow.material.emissiveIntensity = ei;
+    const s = open ? 1.0 + Math.sin(cuePulse * 12) * 0.12 : 0.72;
+    cue.scale.setScalar(s);
+    cueArrow.position.y = open ? 0.46 + Math.sin(cuePulse * 12) * 0.06 : 0.5;
+  }
 
   // ── the rising layoff tide ──
   const tide = layoffTide(28);
@@ -421,12 +487,11 @@ export function startGame({ canvas, hud }){
   let elapsed = 0, graceT = 0;
 
   // PERFECT window = caught them at the very top of the stand-up (bob near apex)
-  const PERFECT_THRESH = 0.74;
-  const STUMBLE_LOCK = 0.34;       // brief lockout after a mistimed tap
+  const PERFECT_THRESH = 0.68;
+  const STUMBLE_LOCK = 0.18;       // brief recoil after a mistimed tap (not sticky)
 
   const PERFECT_WORDS = ['STOMPED!', 'CRUSHED!', 'FLATTENED!', 'BULLDOZED!', 'STEAMROLLED!'];
   const GOOD_WORDS = ['up!', 'climb!', 'next!', 'hustle!', 'move!'];
-  const STUMBLE_WORDS = ['OFF-BEAT', 'MISTIMED', 'TOO SOON', 'WHIFF'];
   let popI = 0;
   const pickWord = (arr) => arr[(popI++) % arr.length];
 
@@ -456,7 +521,7 @@ export function startGame({ canvas, hud }){
     slow = 0; timeScale = 1; camKick = 0; shake = 0;
     camFocus.set(0, current.y + CAM_HERO_BELOW, 0);
     placeCamera();
-    layoutFacade();
+    resetFacade();
     hud.setScore(0); hud.setCombo(0); hud.setTitle('INTERN'); hud.setReady(true); hud.setDead(null);
   }
 
@@ -466,7 +531,13 @@ export function startGame({ canvas, hud }){
     const target = rungByIdx(current.idx + 1);
     if (!target) return;
     const bob = bobOf(target);
-    if (bob <= WIN_THRESH){ stumble(); return; }   // mistimed → stumble, no climb
+    if (bob <= WIN_THRESH){
+      // mistimed — tell them HONESTLY which way they were off (rising = they're not up
+      // yet, falling = they already sat back down)
+      const rising = Math.cos(clock * tempoAt(target.idx) + target.bobPhase) > 0;
+      stumble(rising ? 'TOO EARLY' : 'TOO LATE');
+      return;
+    }
     hopPerfect = bob >= PERFECT_THRESH;
     hopFrom = { x: current.x, y: current.y };
     hopTo = target;
@@ -476,13 +547,13 @@ export function startGame({ canvas, hud }){
   }
 
   // mistimed tap: hero flinches in place, loses the combo + a beat, tide keeps rising.
-  function stumble(){
+  function stumble(word){
     state = STUMBLE;
     stumbleT = 0;
     combo = 0;
     hud.setCombo(0);
     sfxStumble();
-    hud.pop(STUMBLE_WORDS[(popI++) % STUMBLE_WORDS.length], 'plain');
+    hud.pop(word || 'TOO EARLY', 'plain');
   }
 
   function landHop(){
@@ -570,13 +641,6 @@ export function startGame({ canvas, hud }){
     placeCamera();
   }
 
-  function layoutFacade(){ facade.position.y = Math.floor(camFocus.y / FACADE_TILE) * FACADE_TILE - FACADE_TILE; }
-  function updateFacade(){
-    // keep two tiles of windows always straddling the camera as it climbs
-    const base = camFocus.y * FACADE_PARALLAX;
-    facade.position.y = Math.floor((base) / FACADE_TILE) * FACADE_TILE;
-    facade.position.x = 0;
-  }
 
   // ── main loop ──
   let last = performance.now();
@@ -610,23 +674,23 @@ export function startGame({ canvas, hud }){
     }
     mp.needsUpdate = true;
 
-    // coworkers' nervous typing-bob + perfect-window glow
+    // coworkers' crouch→stand cycle (the visible metronome) + target desk glow
     for (const r of rungs){
       if (r.stomped) continue;
       const b = bobOf(r);
-      r.worker.position.y = r.y + Math.max(0, b) * 0.16;   // bob up only (stand to stretch)
-      // arms type when low, lift at apex
+      const u = (b + 1) / 2;                                // 0 crouched → 1 standing tall
+      r.worker.position.y = r.y + Math.max(0, b) * 0.34;    // clearly rises when standing
+      r.worker.scale.y = 0.8 + 0.26 * u;                    // crouch low, stretch up tall
       if (r.rig){
-        r.rig.armL.rotation.x = -0.3 - 0.5 * Math.max(0, b);
-        r.rig.armR.rotation.x = -0.3 - 0.5 * Math.max(0, b);
+        // arms hammer the keyboard when crouched, fling up when they stand
+        const reach = -0.25 - 0.95 * u;
+        r.rig.armL.rotation.x = reach; r.rig.armR.rotation.x = reach;
       }
-      // glow the desk accent when in the perfect window (only the NEXT target matters,
-      // but glowing all upcoming reads as a rhythm wave — keep it to the next 2)
+      // secondary cue: the target desk's accent edge glows during the window
       const m = r.slab.userData.accentMesh;
       if (m){
         const isTarget = current && (r.idx === current.idx + 1);
-        const lit = isTarget && b > WIN_THRESH;
-        m.material.emissiveIntensity = lit ? 1.4 : 0;
+        m.material.emissiveIntensity = (isTarget && b > WIN_THRESH) ? 1.2 : 0;
       }
     }
 
@@ -685,8 +749,9 @@ export function startGame({ canvas, hud }){
     }
 
     updateParticles(gdt);
+    updateCue(dt);
     updateCamera(gdt);
-    updateFacade();
+    syncFacade();
     composer.render();
   }
 
