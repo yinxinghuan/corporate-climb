@@ -81,17 +81,27 @@ export function facadeStorey(idx){
     : tier < 0.45 ? 0x223044
     : tier < 0.78 ? 0x214038
     : 0x3a3220;
-  // lit-window warmth + how many are lit (busy mid-floors glow most)
-  const litCol = tier > 0.78 ? 0xffd676 : tier > 0.45 ? 0xffcaa0 : 0x9fd0ee;
-  const litRate = mechanical ? 0.06 : tier < 0.45 ? 0.28 : tier < 0.78 ? 0.5 : 0.34;
+  // lit windows: warm-dominant palette that shifts with altitude, plus an occasional
+  // cool one for variety. How many are lit varies per floor (busy mid-floors glow most).
+  const warm = tier > 0.78 ? [0xffd66a, 0xffe6a0] : tier > 0.45 ? [0xffcf86, 0xffdca2] : [0xffcd8a, 0xffbd6c];
+  const coolLit = 0x86d2ff;
+  const litRate = mechanical ? 0.10 : tier < 0.45 ? 0.32 : tier < 0.78 ? 0.5 : 0.36;
   const frame = tier > 0.78 ? 0x6b5320 : 0x141d29;
 
   for (let c = 0; c < FAC_COLS; c++){
     const x = (c - (FAC_COLS - 1) / 2) * (FAC_CW + FAC_GAPX);
     const lit = hash(idx * 31.7 + c * 7.3) < litRate;
-    const col = lit ? litCol : glass;
-    g.add(box(FAC_CW, FAC_CH, 0.12, col, x, 0, 0,
-      lit ? { e: col, ei: tier > 0.78 ? 1.1 : 0.85, r: 0.6 } : { r: 0.5 }));
+    if (lit){
+      // per-window VARIED glow strength (raised floor so none reads as "off") + hue:
+      // mostly warm, ~1 in 5 a cool cyan. h2 drives both, so warm windows glow hottest.
+      const h2 = hash(idx * 5.1 + c * 2.7);
+      const cool = h2 < 0.2;
+      const col = cool ? coolLit : warm[h2 < 0.6 ? 0 : 1];
+      const ei = 1.0 + h2 * 0.95;                       // ~1.0 → 1.95, clearly glowing
+      g.add(box(FAC_CW, FAC_CH, 0.12, col, x, 0, 0, { e: col, ei, r: 0.5 }));
+    } else {
+      g.add(box(FAC_CW, FAC_CH, 0.12, glass, x, 0, 0, { r: 0.5 }));
+    }
   }
   // floor slab band beneath the windows + a thin sill above
   g.add(box(FACADE_W + 0.5, 0.16, 0.18, frame, 0, -FAC_CH / 2 - STOREY_H * 0.18, 0.02));

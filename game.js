@@ -477,8 +477,11 @@ export function startGame({ canvas, hud }){
       idx, x, y, half: DESK_HALF, slab, worker,
       rig: worker.userData.rig, wh: worker.userData.height,
       bobPhase: idx * 1.27, stomped: false,
+      standY: y,    // where the hero's feet rest on this rung (lifts onto the bent back once stomped)
     };
   }
+  // height of a stomped coworker's back above their desk — the hero stands here
+  const backHeightOf = r => (r.wh || 1.6) * 0.34;
 
   function spawnNext(){ rungs.push(makeRung(nextIdx++)); }
   function ensureAhead(){ while (rungs[rungs.length - 1].idx < current.idx + AHEAD) spawnNext(); }
@@ -500,7 +503,7 @@ export function startGame({ canvas, hud }){
   let current = null;
   let score = 0, combo = 0, best = readBest();
   let curTitle = 'INTERN';
-  let hopT = 0, hopFrom = null, hopTo = null, hopPerfect = false;
+  let hopT = 0, hopFrom = null, hopTo = null, hopLandY = 0, hopPerfect = false;
   let stumbleT = 0;
   let deadTimer = 0;
   let elapsed = 0, graceT = 0;
@@ -559,8 +562,9 @@ export function startGame({ canvas, hud }){
       return;
     }
     hopPerfect = crouch >= PERFECT_THRESH;
-    hopFrom = { x: current.x, y: current.y };
+    hopFrom = { x: current.x, y: current.standY };       // start from where we stand (on the prev back)
     hopTo = target;
+    hopLandY = target.y + backHeightOf(target);          // land ON the next coworker's bent back
     hopT = 0;
     state = HOP;
     hero.rotation.y = (target.x > current.x) ? -0.5 : 0.5;   // face the direction of travel
@@ -621,6 +625,7 @@ export function startGame({ canvas, hud }){
     if (w.userData.waist) w.userData.waist.rotation.x = 1.55;   // hold a deep bow
     w.scale.y = hard ? 0.84 : 0.9;                              // slight compression only
     w.position.y = r.y - (hard ? 0.16 : 0.12);                 // pressed down a little
+    r.standY = r.y + backHeightOf(r);                          // hero now rests ON the bent back
     puffFx(r.x, r.y + 0.12, 0.35, { count: hard ? 7 : 5, color: 0xd9d2c2 });
   }
 
@@ -741,22 +746,22 @@ export function startGame({ canvas, hud }){
       hopT += gdt;
       const t = clamp(hopT / HOP_TIME, 0, 1);
       hero.position.x = lerp(hopFrom.x, hopTo.x, t);
-      hero.position.y = lerp(hopFrom.y, hopTo.y, t) + 4 * HOP_APEX * t * (1 - t);
+      hero.position.y = lerp(hopFrom.y, hopLandY, t) + 4 * HOP_APEX * t * (1 - t);
       // squash/stretch
       const stretch = 1 + 0.22 * Math.sin(Math.PI * t) * (1 - 0.4 * t);
       hero.scale.set(1 / Math.sqrt(stretch), stretch, 1 / Math.sqrt(stretch));
       poseHop(t);
       if (t >= 1){
-        hero.position.set(hopTo.x, hopTo.y, 0.05);
+        hero.position.set(hopTo.x, hopLandY, 0.05);
         hero.scale.set(1, 1, 1);
         restPose();
         landHop();
       }
     } else if (state === IDLE){
-      // anxious idle: small nervous bob + arm fidget
+      // anxious idle: small nervous bob + arm fidget — standing on the prev coworker's back
       idleClock += gdt;
       const air = Math.abs(Math.sin(idleClock * 3.4));
-      hero.position.y = current.y + 0.05 * air;
+      hero.position.y = current.standY + 0.05 * air;
       hero.scale.set(1, 1 + 0.04 * air, 1);
       if (rig && rigBase){
         rig.armL.rotation.x = rigBase.armL - 0.12 * air;
@@ -767,7 +772,7 @@ export function startGame({ canvas, hud }){
       stumbleT += gdt;
       const w = Math.sin(stumbleT / STUMBLE_LOCK * Math.PI);
       hero.position.x = current.x + Math.sin(stumbleT * 40) * 0.05 * (1 - stumbleT / STUMBLE_LOCK);
-      hero.position.y = current.y + 0.04 * w;
+      hero.position.y = current.standY + 0.04 * w;
       hero.rotation.z = Math.sin(stumbleT * 30) * 0.08 * (1 - stumbleT / STUMBLE_LOCK);
       if (stumbleT >= STUMBLE_LOCK){ hero.position.x = current.x; hero.rotation.z = 0; restPose(); state = IDLE; }
     } else if (state === DEAD_FALL){
