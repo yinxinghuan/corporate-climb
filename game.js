@@ -522,6 +522,7 @@ export function startGame({ canvas, hud }){
   let stumbleT = 0;
   let deadTimer = 0;
   let elapsed = 0, graceT = 0;
+  let started = false;   // the game is PRELOADED off-screen — nothing ticks (no tide, no death) until the first real tap
 
   // PERFECT window = caught them at the very top of the stand-up (bob near apex)
   const PERFECT_THRESH = 0.68;
@@ -543,7 +544,7 @@ export function startGame({ canvas, hud }){
     while (rungs[rungs.length - 1].idx < AHEAD) spawnNext();
     score = 0; combo = 0; state = IDLE;
     curTitle = 'INTERN';
-    elapsed = 0; graceT = 0;
+    elapsed = 0; graceT = 0; started = false;
     hopT = 0; stumbleT = 0;
     tideY = TIDE_START;
     setHero(pickChar());
@@ -564,6 +565,7 @@ export function startGame({ canvas, hud }){
 
   function startHop(){
     audioUnlock();
+    started = true;                      // first tap activates the run (tide + death checks)
     if (state !== IDLE) return;          // timing game — no tap buffering across hop/stumble
     const target = rungByIdx(current.idx + 1);
     if (!target) return;
@@ -700,7 +702,7 @@ export function startGame({ canvas, hud }){
     shake = lerp(shake, 0, 6 * dt);
     clock += gdt;
 
-    const playing = (state === IDLE || state === HOP || state === STUMBLE);
+    const playing = started && (state === IDLE || state === HOP || state === STUMBLE);
     if (playing){
       elapsed += gdt;
       graceT += gdt;
