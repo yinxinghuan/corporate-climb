@@ -321,18 +321,8 @@ const hud = {
     } else comboEl.classList.remove('show');
   },
   setDead(payload){
-    if (!payload){
-      overEl.classList.remove('show');
-      started = false;
-      wordmarkEl.classList.remove('hidden');
-      scoreEl.classList.remove('show');
-      titleEl.classList.remove('show');
-      comboEl.classList.remove('show');
-      scoreEl.textContent = '0';
-      titleEl.textContent = 'INTERN';
-      guideEl.classList.add('show');
-      return;
-    }
+    if (!payload){ overEl.classList.remove('show'); return; }   // just hide the overlay
+    started = false;                                            // run ended → next enterPlay re-arms
     $('#finalScore').textContent = String(payload.score);
     $('#finalBest').textContent = String(payload.best);
     $('#finalTitle').textContent = payload.title || 'INTERN';
@@ -360,7 +350,9 @@ addEventListener('pointerdown', (e) => {
   api.startHop();
 }, { passive:true });
 
-$('#again').addEventListener('click', () => api.restart());
+// Replaying from the game-over card → go straight in-game (no attract/title): the
+// player is already engaged, so don't make them tap again to start.
+$('#again').addEventListener('click', () => { enterPlay(); api.restart(); });
 $('#overRank').addEventListener('click', openLbFull);
 
 // ── Champion pill + full leaderboard ──

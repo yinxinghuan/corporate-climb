@@ -666,7 +666,7 @@ export function startGame({ canvas, hud }){
     hud.setDead({ score, best, title: curTitle });
   }
 
-  function restart(){ audioUnlock(); sfxUiClick(); reset(); }
+  function restart(){ audioUnlock(); sfxUiClick(); reset(); started = true; }   // explicit replay → arm immediately (skip attract)
 
   // ── camera ──
   function placeCamera(){
