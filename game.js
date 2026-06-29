@@ -15,7 +15,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { deskSlab, facadeStorey, STOREY_H, layoffTide, DESK_TONES } from './builders/tower.js?v=2';
-import { CHARACTERS } from './builders/characters.js?v=1';
+import { P, box, cyl, ball, darken } from '@engine-3d';
+import { CHARACTERS } from './builders/characters.js?v=2';
 
 // --- tunables ---------------------------------------------------------------
 const RUNG_RISE = 1.72;          // vertical gap between desk ledges
