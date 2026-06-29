@@ -17,6 +17,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { deskSlab, facadeStorey, STOREY_H, layoffTide, DESK_TONES } from './builders/tower.js?v=2';
 import { P, box, cyl, ball, darken } from '@engine-3d';
 import { CHARACTERS } from './builders/characters.js?v=2';
+import { CARTRIDGE } from './cartridge/index.js?v=1';
 
 // --- tunables ---------------------------------------------------------------
 const RUNG_RISE = 1.72;          // vertical gap between desk ledges
@@ -104,7 +105,7 @@ export function startGame({ canvas, hud }){
   renderer.toneMappingExposure = 1.04;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x141d2b, 34, 58);   // dusk corporate haze
+  scene.fog = new THREE.Fog(CARTRIDGE.fog.color, CARTRIDGE.fog.near, CARTRIDGE.fog.far);
 
   const camera = new THREE.OrthographicCamera(-VIEW, VIEW, VIEW, -VIEW, 0.1, 200);
   const camFocus = new THREE.Vector3(0, CAM_HERO_BELOW, 0);
@@ -116,11 +117,11 @@ export function startGame({ canvas, hud }){
     new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
       uniforms: {
-        top: { value: new THREE.Color(0x101830) },   // deep navy crown
-        mid: { value: new THREE.Color(0x2a3358) },   // dusk blue
-        bot: { value: new THREE.Color(0x7a5a5e) },   // hazy mauve horizon
-        glow: { value: new THREE.Color(0xe8a25a) },  // amber sun-glow corner
-        glowDir: { value: new THREE.Vector3(0.5, -0.18, 0.6).normalize() },
+        top: { value: new THREE.Color(CARTRIDGE.sky.top) },
+        mid: { value: new THREE.Color(CARTRIDGE.sky.mid) },
+        bot: { value: new THREE.Color(CARTRIDGE.sky.bot) },
+        glow: { value: new THREE.Color(CARTRIDGE.sky.glow) },
+        glowDir: { value: new THREE.Vector3(...CARTRIDGE.sky.glowDir).normalize() },
       },
       vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
       fragmentShader: 'varying vec3 vP; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 glow; uniform vec3 glowDir; void main(){ vec3 n = normalize(vP); float h = n.y; vec3 c = h > 0.0 ? mix(mid, top, clamp(h*1.15,0.0,1.0)) : mix(mid, bot, clamp(-h*1.6,0.0,1.0)); float g = clamp(dot(n, glowDir), 0.0, 1.0); c = mix(c, glow, g*g*0.55); gl_FragColor = vec4(c,1.0); }',
@@ -129,8 +130,8 @@ export function startGame({ canvas, hud }){
   scene.add(sky);
 
   // ── lighting: cool ambient + warm key (sun) + teal rim, low contrast ──
-  scene.add(new THREE.HemisphereLight(0xbcd0ee, 0x2a2230, 0.7));
-  const key = new THREE.DirectionalLight(0xffe6c4, 0.85);
+  scene.add(new THREE.HemisphereLight(CARTRIDGE.lights.hemiSky, CARTRIDGE.lights.hemiGround, CARTRIDGE.lights.hemiIntensity));
+  const key = new THREE.DirectionalLight(CARTRIDGE.lights.key, CARTRIDGE.lights.keyIntensity);
   key.position.set(6, 16, 9);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
@@ -139,12 +140,12 @@ export function startGame({ canvas, hud }){
   key.shadow.camera.top = 16; key.shadow.camera.bottom = -16;
   key.shadow.bias = -0.0006;
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x6fd0e0, 0.32);
+  const rim = new THREE.DirectionalLight(CARTRIDGE.lights.rim, CARTRIDGE.lights.rimIntensity);
   rim.position.set(-8, 6, -10);
   scene.add(rim);
 
   // ── floating office paper motes — drift up, catch the warm light ──
-  const MOTES = 90;
+  const MOTES = CARTRIDGE.motes.count;
   const mGeo = new THREE.BufferGeometry();
   const mPos = new Float32Array(MOTES * 3);
   for (let i = 0; i < MOTES; i++){
@@ -154,7 +155,7 @@ export function startGame({ canvas, hud }){
   }
   mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
   const motes = new THREE.Points(mGeo, new THREE.PointsMaterial({
-    color: 0xf3ead4, size: 0.12, transparent: true, opacity: 0.55,
+    color: CARTRIDGE.motes.color, size: CARTRIDGE.motes.size, transparent: true, opacity: CARTRIDGE.motes.opacity,
     blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true, fog: false,
   }));
   scene.add(motes);
@@ -239,7 +240,7 @@ export function startGame({ canvas, hud }){
   // ── bloom (executive gold + lit windows + tide glow pop) ──
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.6, 0.84);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), CARTRIDGE.bloom.strength, CARTRIDGE.bloom.radius, CARTRIDGE.bloom.threshold);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
